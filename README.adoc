@@ -67,7 +67,7 @@ The resource is usually acquired as part of instantiation of the manager
 manager goes out of the scope ({cpp}: destructor).
 For brevity we omit speaking about the _move_ semantics which allows us
 to pass the ownership (and hence the responsiblity to release the managed resource)
-over different contexts.
+between different contexts.
 
 ```cpp
 void program(const std::string & fname) {
@@ -275,8 +275,8 @@ def program():
 def run(program):
     coro = program()
     def stack(res):
-        with res as r:
-            next_res = coro.send(r)
+        with res as x:
+            next_res = coro.send(x)
             stack(next_res)
     stack(next(coro))
 
@@ -291,11 +291,11 @@ What happens here?
   nothing has happened yet.
 * Next, `next(coro)` is called. This enters the body of `program`
   and executes `resource1(...)` which returns a _context manager_ for resource #1
-  (not the resource handler itself as mentioned above – this is the crucial point).
+  (not the resource handle itself as mentioned above -- this is the crucial point).
 * This context manager instance is inside `run` passed to `stack` as `res`.
-* Now we are at the line `with res as r:`, which calls `\\__enter__` on the context manager #1.
-  This `\\__enter__` returns a handle `r` to the just acquired resource #1.
-* `coro.send(r)` resumes the `program` where it was left and sends there the handle `r`
+* Now we are at the line `with res as x:`, which calls `\\__enter__` on the context manager #1.
+  This `\\__enter__` returns a handle `x` to the just acquired resource #1.
+* `coro.send(x)` resumes the `program` where it was left and sends there the handle `x`
   which is saved as local variable `r1`.
 * Now, `program` continues and creates a context manager for resource #2 which
   is sent back to `run` and saved to `next_res` variable.
@@ -358,13 +358,16 @@ use c = 3
 resource::release 3
 resource::release 2
 resource::release 1
+--- stderr
 Traceback (most recent call last):
   ...
     assert False, "intentional error`
 ```
 
 The `@contextmanager` part is just a convenient way to create a context manager.
-You can see that the `program` itself is nice function without any syntacitc noise
+You can see that the `program` itself is a nice function
+(more precisely, a generator function)
+without any syntacitc noise
 and without any nesting, yet even in the presence of exception (`assert False`),
 the release actions are called for `r1`, `r2` and `r3` in the right order.
 
@@ -389,8 +392,8 @@ and `run` it, we get an unpleseant
 caused by recursive call in `stack`.
 
 I'm not a Python person, so I will present a simple solution for this,
-but I wouldn't be surprised if this have a better solution --
-just want to demonstrate a solution exists:
+but I wouldn't be surprised if this had a better solution --
+I just want to demonstrate a solution exists:
 
 ```python
 async def run(program):
@@ -445,10 +448,12 @@ Please let me know if you find this intersting
 or if you have seen this trick before, making the `with` statement nesting
 inside  a function driving a coroutine execution.
 To my best knowledge, this is not published anywhere as of today,
-but again, I don't follow Python world.
+but I don't follow Python world and Googling is often not much helpful
+in getting this kind of information.
 
 I can imagine that for the use case which made me think about
 the ways of resource management in Python and which requires
 acquiring many nested resources,
 this can be a revolution in writing the Python code.
+
 Waiting for your feedback 🙏
