@@ -10,8 +10,8 @@ v0.1, 2022-03-02
 
 I am not enthusiastic for Python,
 but I would like to share an idea about RAII-like approach
-for the resource management in Python.
-I don't follow Python world (my preference go for Scala/C++/Rust),
+for the resource management there.
+I don't follow the Python world (my preference go for Scala, C++ or Rust),
 so it's most likely the idea I present here is not new;
 someone must have "discovered" it before me.
 
@@ -25,10 +25,10 @@ the goal is to present an IMO interesting approach in Python.
 By a _resource_ we mean anything which follows the pattern _Acquire_ -- _Use_ -- _Release_.
 That is, a resource which is aquired should be eventually released.
 A typical example from the native world is a memory allocated on the free store,
-in C++ acquired with `new` and released with `delete` (`malloc` / `free` in C).
+in C++ acquired with `new` and released with `delete` (`malloc`/`free` in C).
 
 An example which everybody knows is opening a file (system `fopen`) which returns
-a _handle_ to a just opened file on which we eventually should call some close
+a _handle_ to a just opened file on which we eventually should call some "close"
 (system `fclose`).
 Some other examples most developers should know could be TCP sockets,
 database connections or mutexes (lock/unlock).
@@ -112,7 +112,7 @@ try {
 The runtime guarantees that whatever happens inside the `try` block,
 the `finally` block will be executed.
 
-The pattern is so common that the languages introduced a special measures for it.
+The pattern is so common that the languages introduced some special measures.
 In Java, it is the try-with-resources block:
 
 ```java
@@ -143,8 +143,8 @@ but it's not the purpose of this text to discuss them.
 ### Python: `with` statement
 
 The Python approach is similar, but more functional-programming like
-(quite surprisingly in Python).
-We will use this fact to our advantage later.
+(quite surprisingly in Python) --
+we will use this fact to our advantage later.
 The correct way to open a file for writing in Python is the following:
 
 ```python
@@ -156,13 +156,14 @@ def program():
 ```
 
 The `with` statement starts a block of code, introducing a variable (`as ...`)
-using a handle (`f`) for the just acquired resource (open file).
+using a handle (`f`) for the just acquired resource (opened file).
 What happens underneath here:
 
 1. `open(...)` creates a _context manager_ instance (call it `ctx`)
    which saves the parameters, but itself does nothing,
    just represent what it means to acquire and release the release.
-   (This is the functional programming face of it: to _defer_ the actual side effect.)
+   (This is the functional programming face of it:
+   to leave [_defer_] doing the actual side effect to somebody else.)
 2. Then, `ctx.\\__init__()` is called, making the system call to open the file with parameters
    saved from the `ctx` initialization.
 3. On leaving the block of code (indented after `with`), Python calls `ctx.\\__exit__()`
@@ -180,7 +181,7 @@ def program():
               ...
 ```
 
-### Other approaches -- read yourself
+### Other approaches -- find them yourself
 
 This text is not meant as an exhaustive resource on resource management --
 there are definitely other approaches,
@@ -216,7 +217,7 @@ The `<RAII>` stands for some "magic" to convince Python to "register" release ac
 to be run when we leave the scope.
 This looks like as an impossible task in Python, but it is not.
 What we want to do in the _runtime_ is what Python allows us to do with
-`with` statement` at the time of writing the code:
+the `with` statement at the time of writing the code:
 
 ```python
 def program():
@@ -228,7 +229,7 @@ def program():
 
 i.e. we want to delegate the guarantee to call release actions to Python itself
 and not "invent" some new runtime (which is what IO libraries do in JVM).
-At the same time, we want to avoid the `with` blocks and its inherent nesting
+At the same time, we want to avoid using `with` blocks and their inherent nesting
 (which is probably a Python design which works really well for most use cases).
 
 The idea is to not call `program` directly,
@@ -246,9 +247,9 @@ def program():
 
 In short: a coroutine is a "function" which you enter and can return back to caller
 with `yield`, but unlike with ordinary functions,
-the caller can pass the execution back to the point where you left before
-(after the last `yield`), possibly passing a value there
--- all you need is to assign a result of `yield` to a variable.
+the caller can pass the execution _back to the callee_
+to the point where you left before (after the last `yield`),
+possibly passing a value there -- all you need is to assign a result of `yield` to a variable.
 
 So, a coroutine execution is driven from outside.
 In the example above, the code driving the `program` needs to execute it
@@ -286,14 +287,14 @@ What happens here?
 
 * The `run` function creates a _generator_ from the supplied `program`.
   We save this generator as `coro`.
-  Note that `program` is now _suspended_, i.e. prepared to be run.
+  Note that `coro` is now _suspended_, i.e. prepared to be run;
+  nothing has happened yet.
 * Next, `next(coro)` is called. This enters the body of `program`
   and executes `resource1(...)` which returns a _context manager_ for resource #1
   (not the resource handler itself as mentioned above – this is the crucial point).
-* This context manager instance is inside `run` passed to `stack` as `res`
-  with the help of `yield`.
-* Now we are at the line `with res as r:`, which calls `\\__enter__` on the context manager.
-  This `\\__enter__` returns a handle `r` to the just acquire resource #1.
+* This context manager instance is inside `run` passed to `stack` as `res`.
+* Now we are at the line `with res as r:`, which calls `\\__enter__` on the context manager #1.
+  This `\\__enter__` returns a handle `r` to the just acquired resource #1.
 * `coro.send(r)` resumes the `program` where it was left and sends there the handle `r`
   which is saved as local variable `r1`.
 * Now, `program` continues and creates a context manager for resource #2 which
@@ -339,7 +340,7 @@ def program():
 def run(program):
     coro = program()
     def stack(r):
-        with r as x:
+        with res as x:
             next_res = coro.send(x)
             stack(next_res)
     stack(next(coro))
@@ -395,8 +396,8 @@ just want to demonstrate a solution exists:
 async def run(program):
     coro = program()
 
-    async def stack(r):
-        with r as x:
+    async def stack(res):
+        with res as x:
             next_res = coro.send(x)
             next_stack = asyncio.create_task(stack(next_res))
             await next_stack
