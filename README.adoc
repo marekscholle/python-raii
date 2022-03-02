@@ -30,8 +30,8 @@ in C++ acquired with `new` and released with `delete` (`malloc`/`free` in C).
 An example which everybody knows is opening a file (system `fopen`) which returns
 a _handle_ to a just opened file on which we eventually should call some "close"
 (system `fclose`).
-Some other examples most developers should know could be TCP sockets,
-database connections or mutexes (lock/unlock).
+Some other examples most developers should know:
+TCP sockets, database connections or mutexes (lock/unlock).
 
 The main problem with a proper resource managemnt is ensuring that once a resource is acquired,
 it is released somewhere later, even in the presence of exceptions (in languages having them).
@@ -46,7 +46,7 @@ def program():
     f.close()
 ```
 
-What if the code in (1) or (2) returns or throws (in Python lingo, raises)?
+What if the code in (1) or (2) returns or throws (in the Python lingo, raises)?
 Then we leave the file open "forever", which is a resource _leak_.
 For scripts which exit immediately, this might not be a big problem,
 but for every long running application we need to ensure this will not happen:
@@ -61,20 +61,20 @@ if we don't close a mutex, we have a deadlock.
 An approach which C++ (and Rust and more) takes is the
 _Resource acquisition is initialization_ idiom --
 https://en.wikipedia.org/wiki/Resource_acquisition_is_initialization[RAII].
-The idea is that for each resource we introduce a scope-bound manager (owner).
+The idea is that for each resource we introduce a scope-bound resource manager (owner).
 The resource is usually acquired as part of instantiation of the manager
 ({cpp}: contructor), and the release action is called automatically when the
 manager goes out of the scope ({cpp}: destructor).
-For brevity we omit speaking about the _move_ semantics which allows us
+For brevity I will not speak about the _move_ semantics which allows us
 to pass the ownership (and hence the responsiblity to release the managed resource)
 between different contexts.
 
 ```cpp
 void program(const std::string & fname) {
-  std::fstream f(fname);
-  ...
-  f << "Hello, world";
-  ...
+    std::fstream f(fname);
+    ...
+    f << "Hello, world";
+    ...
 } // f.~fstream() is called here
 ```
 
@@ -83,9 +83,9 @@ is called _always_, on all exit paths, including the exceptional ones.
 One nice property is that RAII approach works really well for nesting resources:
 
 ```cpp
-void program() { // any scope
-  resource1 r1{}; // acquire `r1`
-  resource2 r2{}; // acquire `r2`
+void program() {
+    resource2 r2{}; // acquire the resoure #2
+    resource1 r1{}; // acquire the resoure #1
   ...
 }
 // automatically called (note the order):
@@ -161,12 +161,12 @@ What happens underneath here:
 
 1. `open(...)` creates a _context manager_ instance (call it `ctx`)
    which saves the parameters, but itself does nothing,
-   just represent what it means to acquire and release the release.
+   just represents what it means to acquire and release the resource.
    (This is the functional programming face of it:
    to leave [_defer_] doing the actual side effect to somebody else.)
 2. Then, `ctx.\\__init__()` is called, making the system call to open the file with parameters
    saved from the `ctx` initialization.
-3. On leaving the block of code (indented after `with`), Python calls `ctx.\\__exit__()`
+3. When leaving the block of code indented after `with`, Python calls `ctx.\\__exit__()`
    which closes the file.
    The `\\__exit__` method is called both on standard return and if an exception is raised.
 
@@ -194,7 +194,7 @@ As mentioned above, there is a problem that nesting `with` blocks causes our cod
 to look like spaghetti shifted too much right.
 I would like to present an idea how this can be prevented
 using another Python language feature, _coroutines_.
-I have not seen this before, but I'm not a Python developer (brr)
+I have not seen this before, but I'm not a Python developer (meh)
 and so it's very likely somebody got the idea before me --
 yet I was not able to find any reference on Google for this
 (maybe I searched for bad words).
@@ -309,7 +309,7 @@ Basically, we gradually build the nested `with` blocks inside the `run` driver
 and each time we make a new `with` block, we resume the `program`
 with the resource handle --
 and since the nesting is done inside `run`
-(with the help of recursion instead of hardcoding it in the code itself),
+(with the help of recursion instead of hardcoding it),
 the `program` itself is relieved from it.
 
 Let me show you a concrete example:
@@ -389,7 +389,7 @@ def program():
 
 and `run` it, we get an unpleseant
 `RecursionError: maximum recursion depth exceeded while calling a Python object`
-caused by recursive call in `stack`.
+caused by recursive calling of `stack`.
 
 I'm not a Python person, so I will present a simple solution for this,
 but I wouldn't be surprised if this had a better solution --
@@ -448,12 +448,12 @@ Please let me know if you find this intersting
 or if you have seen this trick before, making the `with` statement nesting
 inside  a function driving a coroutine execution.
 To my best knowledge, this is not published anywhere as of today,
-but I don't follow Python world and Googling is often not much helpful
+but I don't follow Python world and googling is often not much helpful
 in getting this kind of information.
 
 I can imagine that for the use case which made me think about
 the ways of resource management in Python and which requires
-acquiring many nested resources,
-this can be a revolution in writing the Python code.
+acquiring many nested resources, this can be a revolution
+in codeo clarity.
 
 Waiting for your feedback 🙏
