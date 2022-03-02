@@ -11,27 +11,30 @@ v0.1, 2022-03-02
 I am not enthusiastic for Python,
 but I would like to share an idea about RAII-like approach
 for the resource management in Python.
-I don't follow Python world (my preference woudl go for Scala/C++/Rust person),
-so it's most likely the idea I present is not new;
+I don't follow Python world (my preference go for Scala/C++/Rust),
+so it's most likely the idea I present here is not new;
 someone must have "discovered" it before me.
 
-This is not meant as exhaustive article on the topic of resource management,
+This is not meant as an exhaustive article
+on the topic of resource management,
 the goal is to present an IMO interesting approach in Python.
 
 
-## What we mean by "resource management"?
+## What do we mean by "resource management"?
 
 By a _resource_ we mean anything which follows the pattern _Acquire_ -- _Use_ -- _Release_.
-This is, a resource which is aquired should be eventually released.
+That is, a resource which is aquired should be eventually released.
 A typical example from the native world is a memory allocated on the free store,
 in C++ acquired with `new` and released with `delete` (`malloc` / `free` in C).
 
-An example which everybody knows is opening a file (`fopen`) which returns
-a _handle_ to opened file on which we eventually should call close (`fclose`).
-Some other examples could be TCP sockets, database connections or mutexes (lock/unlock).
+An example which everybody knows is opening a file (system `fopen`) which returns
+a _handle_ to a just opened file on which we eventually should call some close
+(system `fclose`).
+Some other examples most developers should know could be TCP sockets,
+database connections or mutexes (lock/unlock).
 
-The main problem with proper resource managemnt is ensuring that once a resource is acquired,
-it is later release, specially in the presence of exceptions (in languages having exceptions).
+The main problem with a proper resource managemnt is ensuring that once a resource is acquired,
+it is released somewhere later, even in the presence of exceptions (in languages having them).
 This is a well known problem, so I will make it short:
 
 ```python
@@ -44,14 +47,14 @@ def program():
 ```
 
 What if the code in (1) or (2) returns or throws (in Python lingo, raises)?
-Then we leave the file open, which is a resource _leak_.
+Then we leave the file open "forever", which is a resource _leak_.
 For scripts which exit immediately, this might not be a big problem,
 but for every long running application we need to ensure this will not happen:
 If we open more and more files and don't close them,
-the operation system will eventually reject opening one more,
+the operation system will eventually reject opening one more;
 if we don't close a mutex, we have a deadlock.
 
-## Quick tour over resource management options
+## Quick tour on resource management solutions
 
 ### RAII
 
@@ -62,8 +65,9 @@ The idea is that for each resource we introduce a scope-bound manager (owner).
 The resource is usually acquired as part of instantiation of the manager
 ({cpp}: contructor), and the release action is called automatically when the
 manager goes out of the scope ({cpp}: destructor).
-For brevity we omit speaking about move semantics which allows to pass the ownership
-and hence the responsiblity to release resource over different contexts.
+For brevity we omit speaking about the _move_ semantics which allows us
+to pass the ownership (and hence the responsiblity to release the managed resource)
+over different contexts.
 
 ```cpp
 void program(const std::string & fname) {
@@ -75,8 +79,8 @@ void program(const std::string & fname) {
 ```
 
 The important thing is that the compiler ensures that the release action
-is called always, on all exit paths, including the exceptional ones.
-One nice property is that RAII approach works really nice for nesting resources:
+is called _always_, on all exit paths, including the exceptional ones.
+One nice property is that RAII approach works really well for nesting resources:
 
 ```cpp
 void program() { // any scope
@@ -84,15 +88,15 @@ void program() { // any scope
   resource2 r2{}; // acquire `r2`
   ...
 }
-// automatically called:
-//   r1.~resource1()
+// automatically called (note the order):
 //   r2.~resource2()
+//   r1.~resource1()
 ```
 
 ### Java, C#: Try-with-resources
 
 This is the approach taken by many mainstream languages with automatic
-memory management: Java, C# (for similar construction in Python, see next section).
+memory management: Java, C# (for similar construction in Python, refer to the next section).
 The idea starts with `try`-`finally` block:
 
 ```java
@@ -106,20 +110,21 @@ try {
 
 (an example from https://docs.oracle.com/javase/tutorial/essential/exceptions/tryResourceClose.html[Oracle Java tutorial]).
 The runtime guarantees that whatever happens inside the `try` block,
-the `finally` block is executed.
+the `finally` block will be executed.
 
-The pattern is so common that the languages introduced a special measures for the pattern.
-In Java, it is the `try-with-resources` block:
+The pattern is so common that the languages introduced a special measures for it.
+In Java, it is the try-with-resources block:
 
 ```java
 try (BufferedReader br = new BufferedReader(new FileReader(path))) {
     return br.readLine();
 }
 ```
-We create an instance derived from a special interface (Java: `Closeable`, C#: `IDisposable`)
-which defines the release action called in case of successful instatiation.
+We create an instance derived from a special interface `Closeable` (C#: `IDisposable`)
+which defines the release action `close()` (C#: `dispose()`) called in case
+of successful construction of `Closeable` instance.
 
-This pattern can lead to a spaghetti code
+This pattern can lead (and often leads) to a spaghetti code
 (similar in nature to the _callback hell_ known from Javascript before `await`/`async` syntax)
 with nested resources:
 
@@ -132,7 +137,7 @@ try (Resource1 r1 = new Resource1()) {
     }
 }
 ```
-There are patterns to deal with this nesting and a code shifted too much right,
+There are ways to deal with this nesting and the code shifted "too much right",
 but it's not the purpose of this text to discuss them.
 
 ### Python: `with` statement
@@ -140,7 +145,7 @@ but it's not the purpose of this text to discuss them.
 The Python approach is similar, but more functional-programming like
 (quite surprisingly in Python).
 We will use this fact to our advantage later.
-The correct way to open a file for writing in Python is this one:
+The correct way to open a file for writing in Python is the following:
 
 ```python
 def program():
@@ -150,20 +155,22 @@ def program():
         ...
 ```
 
-The `with` statement starts a block of code, introducing a variable (`as f`)
-using a handle `f` for the just opened file.
-What happens underneath:
+The `with` statement starts a block of code, introducing a variable (`as ...`)
+using a handle (`f`) for the just acquired resource (open file).
+What happens underneath here:
 
-1. The `open(...)` call creates an instance of a _context manager_ `ctx`
-   which saves the parameters, but itself does not nothing.
+1. `open(...)` creates a _context manager_ instance (call it `ctx`)
+   which saves the parameters, but itself does nothing,
+   just represent what it means to acquire and release the release.
+   (This is the functional programming face of it: to _defer_ the actual side effect.)
 2. Then, `ctx.\\__init__()` is called, making the system call to open the file with parameters
-   save from the initialization of `ctx`.
+   saved from the `ctx` initialization.
 3. On leaving the block of code (indented after `with`), Python calls `ctx.\\__exit__()`
-   which close the file.
-  The `\\__exit__` method is called both on standard return and if an exception is raised.
+   which closes the file.
+   The `\\__exit__` method is called both on standard return and if an exception is raised.
 
-As with try-with-resources in Java/C#, we often Python codebases nesting `with` blocks
-and code there being shifted too much right:
+As with try-with-resources in Java or C#, we often see Python codebases nesting
+`with` blocks and code there shifted too much right:
 
 ```python
 def program():
@@ -173,28 +180,28 @@ def program():
               ...
 ```
 
-### Other
+### Other approaches -- read yourself
 
-This is not meant as exhaustive resource on resource management.
-There are definitely other approaches,
+This text is not meant as an exhaustive resource on resource management --
+there are definitely other approaches,
 the most interesting I know is a `Resource[IO, T]` abstraction in IO monad world.
 See https://typelevel.org/cats-effect/docs/std/resource[Cats Effect] implementation of it.
 
 ## RAII in Python
 
-As mentioned above, there is problem that nesting `with` blocks causes our code
+As mentioned above, there is a problem that nesting `with` blocks causes our code
 to look like spaghetti shifted too much right.
 I would like to present an idea how this can be prevented
 using another Python language feature, _coroutines_.
-I have not seen this before, but I'm not a Python programmer
+I have not seen this before, but I'm not a Python developer (brr)
 and so it's very likely somebody got the idea before me --
 yet I was not able to find any reference on Google for this
 (maybe I searched for bad words).
 I would like to know any prior knowledge of this:
 please let me know at marekscholle@gmail.com.
 
-The idea is to have something like RAII in Python -- when a variable goes out of
-scope, we want a release action to run:
+The idea is to have something like RAII in Python -- when a variable
+goes out of the scope, we want a release action to run:
 
 ```python
 def program():
@@ -203,12 +210,13 @@ def program():
     r3 = <RAII> resource3()
     ...
     # on program exit, run "somehow" registered release actions
-    # for r1, r2, r3, in reversed order, as in C++
+    # for r1, r2, r3, in reversed order, similarly to RAII in C++
 ```
 The `<RAII>` stands for some "magic" to convince Python to "register" release actions
 to be run when we leave the scope.
 This looks like as an impossible task in Python, but it is not.
-What we want to do in the _runtime_ is what Python allows us to do with `with` statement`:
+What we want to do in the _runtime_ is what Python allows us to do with
+`with` statement` at the time of writing the code:
 
 ```python
 def program():
@@ -218,12 +226,13 @@ def program():
               ...
 ```
 
-i.e. we want to delegate the guarantee to call release actions to Python.
+i.e. we want to delegate the guarantee to call release actions to Python itself
+and not "invent" some new runtime (which is what IO libraries do in JVM).
 At the same time, we want to avoid the `with` blocks and its inherent nesting
 (which is probably a Python design which works really well for most use cases).
 
-The idea is to not call `program` directly, but manage it execution
-as a coroutine execution:
+The idea is to not call `program` directly,
+but manage its execution as a coroutine execution:
 
 ```python
 def program():
@@ -235,21 +244,22 @@ def program():
 # for the implementation of the "runner", please continue reading
 ```
 
-In short: the coroutine is a "function" / context which you enter,
-can return back to caller (yield), but unlike with plain function,
-the caller can pass the execution back to the point where you left before,
-possibly giving it a value from outside.
+In short: a coroutine is a "function" which you enter and can return back to caller
+with `yield`, but unlike with ordinary functions,
+the caller can pass the execution back to the point where you left before
+(after the last `yield`), possibly passing a value there
+-- all you need is to assign a result of `yield` to a variable.
 
 So, a coroutine execution is driven from outside.
 In the example above, the code driving the `program` needs to execute it
-_as if_ it was a function
+_as if_ it was an ordinary function
 
 ```python
 def program():
     with resource1(...) as r1:
         with resource2(...) as r2:
             with resource3(...) as r3:
-              ...
+                ...
 ```
 
 Without further ado, here it is:
@@ -276,28 +286,29 @@ What happens here?
 
 * The `run` function creates a _generator_ from the supplied `program`.
   We save this generator as `coro`.
+  Note that `program` is now _suspended_, i.e. prepared to be run.
 * Next, `next(coro)` is called. This enters the body of `program`
   and executes `resource1(...)` which returns a _context manager_ for resource #1
-  (not the resource handler itself).
-* This context manager instance is passed to `stack` as `res`
-  with the help of `yield` keyword`
-  (which is a "return without destroying the local context").
+  (not the resource handler itself as mentioned above – this is the crucial point).
+* This context manager instance is inside `run` passed to `stack` as `res`
+  with the help of `yield`.
 * Now we are at the line `with res as r:`, which calls `\\__enter__` on the context manager.
-  `\\__enter__` returns a handle `r` to the just acquire resource #1.
-* `coro.send(r)` resumes `program` where it was left and sends there the handle `r`
-  which is saved to local variable `r1`.
+  This `\\__enter__` returns a handle `r` to the just acquire resource #1.
+* `coro.send(r)` resumes the `program` where it was left and sends there the handle `r`
+  which is saved as local variable `r1`.
 * Now, `program` continues and creates a context manager for resource #2 which
   is sent back to `run` and saved to `next_res` variable.
-* `run` continues by execution of `stack(next_res)` and the history repeats:
+* `run` continues by executing `stack(next_res)` and the history repeats:
   we acquire the resource #2 by ``\\__enter__``ing on the context manager for it,
   the `program` is resumed provided the resource handle
   which is there saved to a local variable `r2`
 * And so on.
 
 Basically, we gradually build the nested `with` blocks inside the `run` driver
-and each time we make a new `with`` block, we resume the `program`
+and each time we make a new `with` block, we resume the `program`
 with the resource handle --
-and since the nesting is done inside `run`,
+and since the nesting is done inside `run`
+(with the help of recursion instead of hardcoding it in the code itself),
 the `program` itself is relieved from it.
 
 Let me show you a concrete example:
@@ -356,8 +367,8 @@ You can see that the `program` itself is nice function without any syntacitc noi
 and without any nesting, yet even in the presence of exception (`assert False`),
 the release actions are called for `r1`, `r2` and `r3` in the right order.
 
-This idea I have not seen anywhere, but this does not mean I am the first person
-to "discover" it.
+Again: This idea I have not seen anywhere, but this does not mean I am the first person
+who "discovered" it.
 Please let me know if you have seen this before.
 
 This is the idea itself and what follows is just an iteration / warning that there are caveats.
@@ -376,7 +387,7 @@ and `run` it, we get an unpleseant
 `RecursionError: maximum recursion depth exceeded while calling a Python object`
 caused by recursive call in `stack`.
 
-I'm not a Python expert, so I will present a simple solution for this,
+I'm not a Python person, so I will present a simple solution for this,
 but I wouldn't be surprised if this have a better solution --
 just want to demonstrate a solution exists:
 
