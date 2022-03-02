@@ -1,0 +1,9 @@
+# Python Resource Management
+Author Marek Scholle <marekscholle@gmail.com>
+v0.1, 2022-03-02
+:source-highlighter: highlightjs
+:highlightjs-languages: python, shell
+:sectanchors:
+:toc:
+:sectnums:
+:toclevels: 4
