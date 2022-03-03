@@ -8,8 +8,7 @@ v0.1, 2022-03-02
 :sectnums:
 :toclevels: 4
 
-I am not enthusiastic for Python,
-but I would like to share an idea about RAII-like approach
+I would like to share an idea about RAII-like approach
 for the resource management there.
 I don't follow the Python world (my preference go for Scala, C++ or Rust),
 so it's most likely the idea I present here is not new;
@@ -308,7 +307,7 @@ What happens here?
 * The context manager `res1` is _yielded_ ("sent" in the sense of message passing)
   from `program` back to `run`, and passed there to `stack` as `res`.
 * Now we are at the line with the `with` statement which calls `r = res1.\\__enter__()`.
-  The `r` is (the andle to) to the just acquired resource #1.
+  The `r` is the handle to to the just acquired resource #1.
 * `coro.send(r)` resumes the `program` where it was left and sends there the handle `r`
   which is saved as local variable `r1`.
 * Now, the `program` continues and creates a context manager `res2` for the resource #2
