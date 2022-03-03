@@ -15,7 +15,7 @@ so it's most likely the idea I present here is not new;
 someone must have "discovered" it before me.
 TL;DR The idea is to use coroutine trampolining to avoid nesting `with`
 blocks in the code, and so to allow RAII approach:
-when the instance goes out of scope, a release action is executed.
+when an instance goes out of its scope, a release action is executed.
 
 
 ## What do we mean by "resource management"?
@@ -26,10 +26,10 @@ A typical example from the native world is a block of memory allocated on the fr
 in {cpp} acquired with `new` and released with `delete` (C: `malloc`/`free`).
 
 An example which everybody knows is opening a file (C: `fopen`) which returns
-a _handle_ to a just opened file which we eventually should pass to some "close"
+a _handle_ to a just opened file which we should later pass to some close mechanism
 (C: `fclose`).
 Some other examples most developers have met:
-TCP sockets, database connections or mutexes (lock/unlock).
+TCP sockets, database connections or mutexes.
 
 The main problem with a proper resource managemnt is ensuring that once a resource is acquired,
 it is released somewhere later, even in the presence of exceptions (in languages having them).
@@ -63,9 +63,9 @@ https://en.wikipedia.org/wiki/Resource_acquisition_is_initialization[RAII].
 The idea is that for each resource we introduce a scope-bound resource manager
 (also known as _owner_).
 The resource is usually acquired as part of instantiation of the manager
-({cpp}: manager contructor, `mgr::mgr(...)`),
+({cpp}: manager contructor, `mgr m(...)`),
 and the release action is called automatically when the manager goes out of the scope
-({cpp}: manager destructor, `mgr::~mgr()`).
+({cpp}: manager destructor, `m.~mgr()`).
 For brevity I will not speak about the _move_ semantics which allows us to pass the ownership
 (and hence the responsiblity to release the managed resource)
 between different contexts. The file example in {cpp}:
@@ -191,7 +191,7 @@ which is not always seen in real codebases.
 
 This text is not meant as an exhaustive resource on resource management --
 there are definitely other approaches,
-the most interesting I know is a `Resource[IO, T]` abstraction in IO monad world.
+the most interesting I know is a `Resource[IO, T]` abstraction in the IO monad world.
 See the https://typelevel.org/cats-effect/docs/std/resource[Cats Effect] implementation of it.
 
 
@@ -205,7 +205,7 @@ I have not seen this before, but I'm not a Python developer (meh)
 and so it's very likely somebody got the idea before me --
 yet I was not able to find any reference on Google for this
 (maybe I searched for bad words).
-I would like to know any prior knowledge of this:
+I would like to know any prior knowledge on this:
 please let me know at marekscholle@gmail.com.
 
 The idea is to have something like RAII in Python -- when a variable
@@ -217,8 +217,8 @@ def program():
     r2 = <RAII> resource2()
     r3 = <RAII> resource3()
     ...
-    # on program exit, run "somehow" registered release actions
-    # for r1, r2, r3, in reversed order, similarly to RAII in C++
+    # on program exit, run the release actions
+    # for `r1`, `r2`, `r3`, in reversed order, similarly to RAII in C++
 ```
 The `<RAII>` stands for some "magic" to convince Python to "register" release actions
 to be run when we leave the scope.
@@ -255,11 +255,11 @@ def program():
 # please continue reading
 ```
 
-In an oversimplified form:
+An oversimplified introduction:
 a coroutine is a "function" from which you can return back to the caller
 with `yield` (instead of `return`), but unlike with ordinary functions,
 the caller can pass the execution _back to the callee_
-to the point where you left before (after the last `yield`),
+to the point where it was leaved before (after the last `yield`),
 possibly passing a value there -- all you need is to assign a result of `yield` to a variable.
 
 So, a coroutine execution can be driven from outside.
@@ -371,7 +371,8 @@ use c = 3
 resource::release 3
 resource::release 2
 resource::release 1
---- stderr
+```
+```
 Traceback (most recent call last):
   ...
     assert False, "intentional error`
@@ -447,14 +448,12 @@ resource::release 998
 resource::release 1
 resource::release 0
 ```
-followed by
 ```
 Traceback (most recent call last):
   ...
     assert False, "intentional error"
 AssertionError: intentional error
 ```
-in STDERR.
 
 ---
 
