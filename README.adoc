@@ -381,7 +381,7 @@ Traceback (most recent call last):
 The `@contextmanager` part is just a convenient way to create a context manager.
 You can see that the `program` itself is a nice function
 (more precisely, a generator function)
-without any syntacitc noise
+without any syntactic noise
 and without any nesting, yet even in the presence of exception (`assert False`),
 the release actions are called for `r3`, `r2` and `r1`
 (in the right, reversed order).
@@ -469,6 +469,6 @@ in getting this kind of information.
 I can imagine that for the use case which made me think about
 the ways of resource management in Python and which requires
 acquiring many nested resources, this can be a revolution
-in codeo clarity.
+in code safety / clarity.
 
 Waiting for your feedback 🙏
